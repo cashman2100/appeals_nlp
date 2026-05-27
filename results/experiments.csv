@@ -1,0 +1,7 @@
+timestamp,model,split,macro_f1,weighted_f1,accuracy,ci_low,ci_high,notes
+2026-05-16 06:56,robot_rule_based,temporal,0.4159,0.598,0.606,0.4074,0.4232,"production synonyms, today's version"
+2026-05-16 06:56,tfidf_logreg,temporal,0.6447,0.7398,0.7327,0.6376,0.652,"1-2 gram, class_weight=balanced"
+2026-05-16 06:57,tfidf_linsvc,temporal,0.6468,0.7577,0.7594,0.6391,0.6548,"1-2 gram, class_weight=balanced"
+2026-05-16 08:17,ruBert-base,temporal,0.6417,0.7253,0.7232,0.6345,0.6483,"fine-tune full, max_len=128, ep=3"
+2026-05-16 12:29,ruRoberta-large-v2-full,temporal,0.6549,0.729,0.729,0.6479,0.6625,"fine-tune full, max_len=256, ep=5, focal_g=2.0, smooth=0.05, v2"
+2026-05-16 13:47,ruRoberta-large-v2-consolidated,temporal,0.6987,0.8195,0.8155,0.691,0.7071,"fine-tune full, max_len=256, ep=5, focal_g=2.0, smooth=0.05, v2"

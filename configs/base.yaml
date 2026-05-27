@@ -1,0 +1,96 @@
+# ============================================================
+# Appeals-NLP — базовый конфиг (config-driven, расширяемый)
+# Добавление новой фичи = правка этого файла, НЕ переписывание кода
+# ============================================================
+
+project:
+  name: appeals_nlp
+  data_version: v1            # bump -> v2 при добавлении новых УК (старое не ломается)
+  seed: 42
+
+data:
+  raw_csv: data/raw/appeals_full.csv
+  processed_dir: data/processed/v1
+  category_mapping: configs/category_mapping_v1.json
+  min_desc_len: 1             # пустые уже отфильтрованы в SQL
+  anonymize:
+    enabled: false            # STRETCH: вкл. для публичного релиза датасета.
+                              # При true preprocess вызывает src.data.anonymize
+                              # ДО split. MVP не тратит на это время.
+  # Дедуп-стратегия: train оставляет дубли (реальная частотность),
+  # val/test — только уникальные описания (нет утечки)
+  dedup:
+    train_keep_duplicates: true
+    eval_unique_only: true
+
+split:
+  strategy: temporal          # temporal | random_stratified | both
+  temporal:
+    train_years: [2020, 2021, 2022, 2023, 2024]
+    test_years:  [2025, 2026]
+    val_fraction_of_train: 0.1   # последние 10% train по времени -> val
+  random_stratified:           # запасной режим, для ablation
+    test_size: 0.2
+    val_size: 0.1
+    stratify_on: work_label
+
+# ------------------------------------------------------------
+# ЗАДАЧИ (heads). MVP: активна только category.
+# Остальные head'ы прописаны, но enabled:false — включаются позже
+# БЕЗ переделки: меняем флаг, добавляем класс-голову в ModuleDict
+# ------------------------------------------------------------
+tasks:
+  category:
+    enabled: true
+    type: classification
+    target_col: work_label
+    exclude_labels: [UNDEFINED]   # UNDEFINED не учится, идёт в reclassification
+    metric: macro_f1
+    # Task-aligned label consolidation (ADR-017): группируем категории по
+    # бизнес-эквивалентности (одна служба-исполнитель -> один класс).
+    # Обоснование: ГВС/ХВС/Водоснабжение -> одни сантехники, один процесс;
+    # различие лишь в аналитике. Применяется ОДИНАКОВО ко всем подходам.
+    # false -> полная 15-классовая таксономия (отчёт показывает ОБЕ).
+    consolidate:
+      enabled: false
+      groups:
+        Водоснабжение: [ГВС, ХВС, Водоснабжение]
+  priority:
+    enabled: false                # stretch
+    type: ordinal_classification
+    target_col: priority
+    classes: [Низкий, Средний, Высокий, Срочно]
+    metric: [macro_f1, mae, qwk]
+  performer:
+    enabled: false                # stretch
+    type: classification
+    target_col: performer_group   # из positions_normalized.csv
+    drop_na: true                 # строки без исполнителя выкидываем для этой головы
+    metric: macro_f1
+  sentiment:
+    enabled: false                # stretch + трек на +25 (CEDR/RuSentiTweet)
+    type: classification
+    target_col: sentiment_llm     # LLM-разметка
+    metric: macro_f1
+
+model:
+  # pluggable: shared encoder + ModuleDict(heads)
+  encoder: ai-forever/ruBert-base   # MVP. Stretch: ruRoberta-large, LoRA-LLM
+  max_length: 128                   # медиана 44 симв; 128 токенов с запасом
+  dropout: 0.2
+
+train:
+  epochs: 3
+  batch_size: 32
+  lr: 2.0e-5
+  warmup_ratio: 0.1
+  class_weighting: true             # дисбаланс: Отопление 29% vs Ремонт 0.4%
+  fp16: true                        # для T4
+
+eval:
+  primary_metric: macro_f1
+  report_per_class: true
+  bootstrap_ci: true                # доверит. интервалы для "честного SOTA"
+
+experiments:
+  registry: results/experiments.csv  # каждый прогон = строка; таблица отчёта авто-генерится

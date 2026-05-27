@@ -1,0 +1,46 @@
+{
+  "classical": "tfidf_linsvc_consolidated",
+  "modern": "ruRoberta-large-v2-consolidated",
+  "segments": [
+    {
+      "segment": "очень короткие <25",
+      "n": 2278,
+      "classical_f1": 0.7014,
+      "modern_f1": 0.6952,
+      "delta": -0.0064,
+      "ci_low": -0.0256,
+      "ci_high": 0.0128,
+      "modern_wins_sig": false
+    },
+    {
+      "segment": "короткие 25-60",
+      "n": 14263,
+      "classical_f1": 0.6961,
+      "modern_f1": 0.71,
+      "delta": 0.014,
+      "ci_low": 0.0022,
+      "ci_high": 0.025,
+      "modern_wins_sig": true
+    },
+    {
+      "segment": "средние 60-150",
+      "n": 9523,
+      "classical_f1": 0.6547,
+      "modern_f1": 0.6875,
+      "delta": 0.0323,
+      "ci_low": 0.017,
+      "ci_high": 0.0463,
+      "modern_wins_sig": true
+    },
+    {
+      "segment": "длинные >150",
+      "n": 1422,
+      "classical_f1": 0.5542,
+      "modern_f1": 0.6171,
+      "delta": 0.0637,
+      "ci_low": 0.0139,
+      "ci_high": 0.1105,
+      "modern_wins_sig": true
+    }
+  ]
+}

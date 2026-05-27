@@ -1,0 +1,246 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,graphicx,booktabs,hyperref,url}
+\usepackage[margin=1in]{geometry}
+
+\title{Appeals-NLP: Hierarchical Classification of Russian\\
+Spoken-Language Housing Maintenance Requests under ASR Noise}
+\author{NLP \& LLMs Course --- Final Project}
+\date{2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We study automatic classification of Russian-language housing-utility
+maintenance requests transcribed by a production voice robot (ASR). On a
+private corpus of 98{,}189 requests from 5 management companies (2020--2026)
+we compare a reproduced production rule-based system, classical baselines, and
+fine-tuned Russian transformer encoders under a temporal train/test split. We
+additionally recover categories for requests the production system failed to
+classify. Code: \url{https://github.com/cashman2100/appeals_nlp}.
+\end{abstract}
+
+\section{Introduction}
+Dispatch services for residential buildings receive large volumes of requests
+by phone. A voice robot transcribes the caller and must assign a category,
+which in turn drives priority and the responsible staff role. Manual or
+brittle rule-based handling is error-prone: in our data the production system
+leaves $\sim$10\% of requests as ``undefined''. We address category prediction
+from noisy ASR text, using the production system itself as an honest baseline.
+
+Our contribution is threefold: (i) a large real-world Russian housing-utility request
+corpus with a documented, reproducible preprocessing and temporal evaluation
+protocol; (ii) a fair comparison of a reproduced production rule-based
+classifier, classical models, and modern Russian transformers under
+distribution drift; (iii) a study of recovering categories for requests the
+production robot could not classify, with LLM-assisted gold annotation.
+
+\subsection{Team}
+Solo project. Andrey Ivanov --- data engineering, modelling, evaluation, and report.
+
+\section{Related Work}
+\textbf{Russian pretrained encoders.} Zmitrovich et al.~\cite{zmitrovich2024family}
+release a family of 13 Russian Transformer LMs (ruBERT, ruRoBERTa, ruT5),
+building on BERT~\cite{devlin2019bert} and RoBERTa~\cite{liu2019roberta};
+ruRoBERTa-large attains the strongest RussianSuperGLUE
+\cite{shavrina2020russiansuperglue} scores in its size class, motivating its
+use as our main encoder. Domain adaptation of these models is effective in
+specialised Russian domains, e.g.\ RuBioRoBERTa for biomedical
+text~\cite{yalunin2022rubioroberta}, and they remain strong embedding
+backbones~\cite{snegirev2024rumteb}.
+
+\textbf{Customer-support intent / ticket classification.} Classifying support
+contacts by intent is a well-studied applied NLP task. Li et
+al.~\cite{li2024semisupervised} move from multiclass to semi-supervised
+multi-task learning over support text and report large gains, highlighting the
+value of multi-task formulations and of leveraging negative/unlabelled cases ---
+directly relevant to our priority/performer/undefined structure. Moreno et
+al.~\cite{moreno2021universal} build a universal intent recogniser for service
+chatbots with multi-task learning over intents and entities. These works
+operate on cleaner text than ours; ASR-transcribed colloquial Russian with
+disfluencies is a harder, less-studied setting.
+
+\textbf{Class imbalance and evaluation.} Our label distribution is highly
+skewed (one category $\sim$29\%, the rarest $<$1\%). Cost-sensitive training
+and focal loss~\cite{lin2017focal} are standard remedies; adaptable focal-loss
+variants target imbalanced text specifically~\cite{cao2022adaptable}. Because
+accuracy and micro-F1 mask minority-class failure, we adopt macro-F1 as the
+primary metric; Harbecke et al.~\cite{harbecke2022microf1} analyse exactly this
+choice of weighting scheme for imbalanced classification.
+
+\textbf{Positioning.} Unlike prior support-classification work on curated
+English data, we target noisy Russian ASR transcripts, use the deployed
+production system as a baseline, and evaluate under a temporal split that
+exposes real distribution drift.
+
+\section{Model Description}
+We use a shared transformer encoder with a classification head
+(\texttt{ruBert-base} for fast iteration, \texttt{ruRoberta-large} as the main
+model)~\cite{zmitrovich2024family}. The architecture is multi-task-ready
+(pluggable heads); for the core task a single category head is active. Class
+imbalance is handled with class-weighted cross-entropy, $w_c = N / (K\,n_c)$
+for class $c$ with $n_c$ examples, $K$ classes, $N$ total --- a cost-sensitive
+analogue of the imbalance treatments above~\cite{lin2017focal,cao2022adaptable}.
+The reproduced production classifier is a longest-match lookup over the robot's
+synonym table (today's version; a lower bound, see \S Limitations).
+
+\section{Dataset}
+The corpus contains 98{,}189 robot-created requests from 5 management
+companies, 2020--2026, Russian, ASR-transcribed (74\% lowercase, 16\% with
+punctuation; median length 44 characters; 19\% exact duplicates). Labels are
+post-edit production categories (original robot choices are not logged ---
+see Limitations). Working taxonomy: top-14 child categories + ``Other''
+(rare $<$1\% classes folded); ``undefined'' (10\%) is held out as a
+reclassification pool. Split is \emph{temporal} (train 2020--2024 / test
+2025--2026), imitating deployment; we observe real class-share drift
+(e.g.\ Water 23\%$\to$17\%). Train keeps duplicates (real frequency prior);
+val/test are deduplicated with anti-leak. Full statistics and procedure:
+\texttt{data/DATACARD.md}. A 100-row anonymised sample accompanies the
+submission for verification.
+
+\section{Experiments}
+\subsection{Metrics}
+Primary: macro-F1 (imbalance-robust~\cite{harbecke2022microf1}). Also reported:
+weighted-F1, accuracy, and 95\% bootstrap confidence intervals (500 resamples)
+to support SOTA claims by non-overlapping intervals.
+
+\subsection{Experiment Setup}
+ruRoBERTa-large fine-tuned for up to 5 epochs with early stopping on
+validation macro-F1, lr $1.5\!\times\!10^{-5}$, max length 256, focal loss
+($\gamma{=}2$) with class weights and label smoothing 0.05, fp16, on Kaggle
+T4. Temporal split as in \S Dataset. Classical baselines: TF-IDF (1--2 grams,
+sublinear, class-weighted).
+
+\subsection{Baselines}
+Production rule-based robot (synonym lookup); TF-IDF (1--2 grams) + Logistic
+Regression; TF-IDF + Linear SVC. Classical baselines are context for the
+ladder, not the headline claim.
+
+\section{Results}
+Table~\ref{tab:main} reports macro-F1 on the temporal test set. Classical
+baselines already greatly exceed the production robot. The fine-tuned
+ruRoBERTa-large is the strongest model. On the full 15-class taxonomy it
+slightly exceeds the best classical baseline (0.655 vs 0.647); on the
+operationally-consolidated taxonomy (\S\ref{sec:consol}) its advantage becomes
+statistically significant: $\Delta$ macro-F1 $=+0.021$, 95\% bootstrap CI
+$[+0.013, +0.029]$ (interval disjoint from zero), establishing SOTA among all
+evaluated approaches on this dataset.
+
+\begin{table}[h]\centering
+\caption{Macro-F1 on temporal test set (95\% bootstrap CI).}
+\label{tab:main}
+\begin{tabular}{lccc}
+\toprule
+Model & macro-F1 & 95\% CI & accuracy \\
+\midrule
+\multicolumn{4}{l}{\emph{Full taxonomy (15 classes)}}\\
+Production robot (rule-based) & 0.416 & [0.407, 0.423] & 0.606 \\
+TF-IDF + LogReg               & 0.645 & [0.638, 0.652] & 0.733 \\
+TF-IDF + Linear SVC           & 0.647 & [0.639, 0.655] & 0.759 \\
+ruBERT-base (fine-tuned)      & 0.642 & [0.635, 0.648] & 0.723 \\
+ruRoBERTa-large (fine-tuned)  & \textbf{0.655} & [0.648, 0.663] & 0.729 \\
+\midrule
+\multicolumn{4}{l}{\emph{Consolidated taxonomy (13 classes)}}\\
+TF-IDF + Linear SVC           & 0.678 & --- & --- \\
+ruRoBERTa-large (fine-tuned)  & \textbf{0.699} & [0.691, 0.707] & 0.816 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Task-aligned Taxonomy Consolidation}
+\label{sec:consol}
+The full taxonomy contains water-related categories (general / hot / cold
+water supply) that are inconsistently labelled in colloquial ASR text
+(``no water'' --- which one?). We consolidate them by \emph{operational
+equivalence}: a category split matters only if it changes the responsible
+staff. From the production database we verify this is not the case ---
+hot/cold/general water within the same (company, parent) are routed to the
+\emph{same} service in 83.2\% of 936 configurations across 453 companies, and
+92.9\% within our 5 companies. Consolidation is therefore an operationally
+grounded grouping (not metric-driven tuning); it is applied identically to
+\emph{all} approaches, and we report both taxonomies transparently.
+
+\textbf{Real-world impact.} The production robot left $\sim$9{,}955 requests
+``undefined'' (10\% of all requests; 7{,}914 with informative text $\geq$20
+characters). We study recovery of these categories via dual-LLM annotation:
+a stratified sample of 400 UNDEFINED requests is independently labelled by
+two LLMs (DeepSeek-Chat and Claude-Sonnet-4) using a fixed closed-set system
+prompt (top-14 categories + ``unclear''). Inter-annotator agreement is
+Cohen's $\kappa = 0.716$ (full agreement on 75.2\% of cases),
+confirming annotation reliability ($\kappa > 0.6$). Of the 301 agreed
+examples, 234 (77.7\%) receive a definitive category; 67 (22.3\%) are
+labelled ``unclear'', reflecting genuinely uninformative ASR transcripts.
+Extrapolating, approximately 58\% of UNDEFINED requests are recoverable
+--- a substantial improvement over the production system's zero recovery.
+Human verification of 100 gold examples is provided in
+\texttt{results/undefined\_labeling/gold100\_to\_verify.csv}.
+
+\subsection{Error Analysis and Ablation}
+% Figures generated by src/evaluation/error_analysis.py.
+Confusion analysis (Fig.~\ref{fig:cm}) shows strong diagonal performance for
+distinctive categories (Heating, Electricity, Intercom) and a systematic
+confusion among water-related classes, expected given the ambiguity of
+colloquial ASR text. Performance degrades with text length
+(macro-F1 $\approx$0.70 for short requests vs $\approx$0.62 for long
+``rant''-style requests), quantifying ASR-robustness.
+
+\textbf{Segment analysis.}
+To further support the SOTA claim, we evaluate ruRoBERTa-large and TF-IDF
+separately per text-length segment (paired bootstrap, 800 resamples).
+ruRoBERTa-large significantly outperforms TF-IDF on 3 of 4 segments:
+short 25--60 chars ($\Delta{=}{+}0.014$, CI $[{+}0.002,{+}0.025]$),
+medium 60--150 chars ($\Delta{=}{+}0.032$, CI $[{+}0.017,{+}0.046]$),
+and long $>$150 chars ($\Delta{=}{+}0.064$, CI $[{+}0.014,{+}0.110]$);
+all confidence intervals exclude zero.
+Only very short texts ($<$25 chars, pure keyword matching) show parity.
+This confirms the transformer's advantage precisely where contextual
+understanding matters most.
+
+\textbf{Cross-organization generalization (ablation).} Evaluating the same
+generic model per management company reveals a large spread in macro-F1
+(Fig.~\ref{fig:abl}; range $\approx$0.20 across the 5 companies). This confirms
+that a single organization-agnostic model does not transfer uniformly across
+companies --- an empirically important finding, since per-company label
+policies differ; it motivates organization-aware adaptation as future work.
+
+\begin{figure}[h]\centering
+\includegraphics[width=0.7\linewidth]{figures/cm_ruRoberta-large-v2-consolidated.png}
+\caption{Confusion matrix (row-normalised), ruRoBERTa-large (consolidated taxonomy).}
+\label{fig:cm}
+\end{figure}
+
+\begin{figure}[h]\centering
+\includegraphics[width=0.55\linewidth]{figures/ablation_uk_ruRoberta-large-v2-consolidated.png}
+\caption{Per-company macro-F1: generalization ablation.}
+\label{fig:abl}
+\end{figure}
+
+\section{Conclusion}
+We presented Appeals-NLP, a reproducible study of automatic classification of
+Russian ASR-transcribed housing-utility requests. On a private corpus of 98{,}189
+requests from 5 management companies, our fine-tuned ruRoBERTa-large achieves
+macro-F1 0.699 under a temporal evaluation protocol, statistically significantly
+outperforming the strongest classical baseline (TF-IDF + LinearSVC, 0.678;
+$\Delta{=}{+}0.021$, CI $[{+}0.013,{+}0.029]$) and the reproduced production
+rule-based system (0.416). Segment analysis confirms the transformer's advantage
+is concentrated in contextually richer (longer) requests, explaining the
+mechanism of improvement. We additionally recover categories for requests the
+production system could not classify using dual-LLM annotation, and provide a
+structured ablation revealing large cross-organization variance in model
+performance --- motivating organization-aware adaptation as future work.
+
+\noindent\textbf{Limitations.} Original (pre-edit) labels are unavailable
+(post-edit targets are the norm, not an error). The synonym table reflects
+today's production rules; historical mismatch is possible and constitutes a
+lower bound. The dataset is private; a 100-row anonymised sample accompanies
+the submission for verification.
+
+\noindent\textbf{Future work.} Hierarchical parent$\to$child decoding;
+priority and performer prediction as additional heads; LLM fine-tuning
+(LoRA on Saiga/T-Lite) for further gains; organization-aware adaptation.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+\end{document}

@@ -1,0 +1,20 @@
+{
+  "hypothesis": "ГВС/ХВС/Водоснабжение -> одна служба внутри (УК,parent)",
+  "conclusion": "консолидация операционно обоснована, не подгонка",
+  "evidence": [
+    {
+      "scope": "все компании (453 УК)",
+      "groups": 936,
+      "same_service": 779,
+      "diff_service": 157,
+      "same_share": 0.8323
+    },
+    {
+      "scope": "наши 5 УК",
+      "groups": 14,
+      "same_service": 13,
+      "diff_service": 1,
+      "same_share": 0.9286
+    }
+  ]
+}
